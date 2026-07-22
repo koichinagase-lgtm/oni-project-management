@@ -136,12 +136,23 @@ ONI.auth = (function () {
           if (res.error) { fail(res.error.message); return; }
           if (res.data.session) {
             window.location.reload();   // 確認不要の設定ならそのまま入れる
-          } else {
-            box.innerHTML = "";
-            box.appendChild(el("h1", "auth-title", "確認メールを送りました"));
-            box.appendChild(el("p", "auth-sub",
-              e + " に確認メールを送りました。リンクを開くとログインできるようになります。"));
+            return;
           }
+          // すでに登録済みのメールで登録しようとすると、Supabase は
+          // 「アカウントの有無を外部に漏らさない」ため成功したように返す。
+          // その場合 identities が空になるので、案内を出し分ける。
+          var known = res.data.user && res.data.user.identities
+            && res.data.user.identities.length === 0;
+          if (known) {
+            renderForm("signin",
+              "このメールアドレスは登録済みです。お使いのパスワードでログインしてください。"
+              + "（分からない場合は「パスワードを忘れた場合」から再設定できます）");
+            return;
+          }
+          box.innerHTML = "";
+          box.appendChild(el("h1", "auth-title", "確認メールを送りました"));
+          box.appendChild(el("p", "auth-sub",
+            e + " に確認メールを送りました。リンクを開くとログインできるようになります。"));
         });
       } else {
         busy(true, "確認中…");
@@ -249,15 +260,34 @@ ONI.auth = (function () {
 
   /* -------------------------------------------------------- セッション */
 
-  /** ログイン済みなら pm_workspace_users から自分の行を取る */
+  /**
+   * ログイン済みなら pm_workspace_users から自分の行を取る。
+   * 先に別システムでアカウントを作っていた人は user_id が未設定のことがあるため、
+   * 見つからなければメールアドレスでも照合する。
+   */
   function loadMe() {
-    return client()
-      .from("pm_workspace_users")
-      .select("id, email, role")
+    var c = client();
+    return c.from("pm_workspace_users")
+      .select("id, email, role, user_id")
       .eq("user_id", session.user.id)
       .maybeSingle()
       .then(function (res) {
-        me = res.data || null;
+        if (res.data) return res.data;
+        return c.from("pm_workspace_users")
+          .select("id, email, role, user_id")
+          .ilike("email", session.user.email)
+          .maybeSingle()
+          .then(function (r2) { return r2.data || null; });
+      })
+      .then(function (row) {
+        me = row;
+        // 紐付いていなければ、このタイミングで結びつけておく
+        if (row && !row.user_id) {
+          c.from("pm_workspace_users")
+            .update({ user_id: session.user.id })
+            .eq("id", row.id)
+            .then(function () {}, function () {});
+        }
         return me;
       });
   }
