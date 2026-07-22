@@ -1374,7 +1374,8 @@ ONI.app = (function () {
   function wire() {
     $("tabs").addEventListener("click", function (e) {
       var b = e.target.closest(".tab");
-      if (b) setTab(b.dataset.tab);
+      // レシピ管理などのリンク（data-tab を持たない）は、そのまま遷移させる
+      if (b && b.dataset.tab) setTab(b.dataset.tab);
     });
 
     $("view-switch").addEventListener("click", function (e) {
