@@ -62,8 +62,20 @@
 .auth-sub { font-size: 12px; color: var(--muted); line-height: 1.8; margin: 0; }
 .auth-form { display: grid; gap: 10px; margin-top: 20px; }
 .auth-btn { width: 100%; padding: 10px; }
-.auth-note { font-size: 11px; color: var(--muted); margin: 12px 0 0; min-height: 1em; }
+.auth-note { font-size: 11px; color: var(--muted); margin: 12px 0 0; min-height: 1em; line-height: 1.7; }
 .auth-note.is-error { color: var(--oni-red); }
+.auth-links { display: grid; gap: 6px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.auth-link {
+  font: inherit;
+  font-size: 11px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.auth-link:hover { color: var(--oni-red); }
 
 .me-badge { font-size: 11px; color: var(--muted); white-space: nowrap; }
 
