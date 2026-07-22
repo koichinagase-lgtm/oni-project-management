@@ -1580,3 +1580,92 @@ body {
   font-size: 12px;
   box-shadow: var(--shadow);
 }
+
+/* =====================================================================
+   モバイル対応
+   - スマホでは タップで詳細を開き、日付・担当などはドロワー内のフォームで編集する
+   - バーのドラッグ移動・リサイズ、行の並び替え、空きセルのドラッグ新規作成は
+     PC（マウス）向けの操作のまま（タッチではスクロールが優先される）
+   ===================================================================== */
+@media (max-width: 720px) {
+  :root { --sidebar-w: 150px; --row-h: 40px; }
+
+  /* --- アプリバー: 2段（上=ブランド+ログアウト / 下=タブ） --- */
+  .appbar { flex-wrap: wrap; height: auto; gap: 0 8px; padding: 8px 10px 0; }
+  .brand-sub { font-size: 11px; }
+  .me-badge { display: none; }
+  .appbar-right { margin-left: auto; }
+  .tabs {
+    order: 10;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 0;
+  }
+  .tab { flex: none; padding: 8px 14px; font-size: 13px; }
+
+  /* --- ツールバー: 折り返し。検索は最後に全幅 --- */
+  .toolbar { flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
+  .toolbar .input[type="search"] { order: 10; width: 100%; }
+  .range-label { font-size: 13px; }
+  .outside-count { display: none; }
+  .seg button { padding: 7px 10px; font-size: 12px; }
+
+  /* --- ガント --- */
+  .g-label { padding: 0 8px; gap: 5px; }
+  .g-label-text { font-size: 12px; }
+  .g-group-tools { opacity: 1; }        /* ホバーが無いため常時表示 */
+  .g-bar-handle { display: none; }      /* リサイズはPC向け。日付は詳細から編集 */
+  .legend { flex-wrap: wrap; gap: 6px 14px; padding: 8px 10px; }
+  .legend .legend-hint { display: none; }  /* マウス操作の説明のため非表示 */
+
+  /* --- タスク管理: 縦積み（項目ナビは上部・高さ制限つき） --- */
+  .task-layout { flex-direction: column; }
+  .task-nav {
+    width: 100%;
+    max-height: 32vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    padding: 10px 10px 14px;
+  }
+  .task-main { padding: 16px 12px 70px; }
+  .task-main-head { flex-wrap: wrap; }
+  .task-main-head .input { margin-left: 0; width: 100%; }
+
+  /* --- シート（アイデアmemo・担当者） --- */
+  .sheet { padding: 14px 12px 70px; }
+
+  /* --- 詳細ドロワー: 全画面 --- */
+  .drawer { width: 100vw; border-left: 0; }
+  .d-head { padding: 12px 14px; }
+  .d-body { padding: 14px 14px 70px; }
+
+  /* --- 絞り込みポップオーバー: 下から出るシート型 --- */
+  .popover {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 60vh;
+    border-radius: 12px 12px 0 0;
+    padding: 16px 16px 24px;
+    box-shadow: 0 -8px 32px rgba(26, 26, 26, .18);
+  }
+
+  /* --- モーダル --- */
+  .modal { padding: 16px 16px 18px; }
+
+  /* --- ホバー前提の要素を常時見えるように --- */
+  .member-grip { color: var(--line); }
+  .d-prop-grip { color: var(--line); }
+}
+
+/* タッチ端末共通: 押しやすい大きさに */
+@media (pointer: coarse) {
+  .btn, .tab, .seg button { min-height: 40px; }
+  .btn-icon { min-width: 40px; }
+  .g-group-tools { opacity: 1; }
+  .input, input, select, textarea { font-size: 16px; } /* iOSのフォーカス時自動ズームを防ぐ */
+}

@@ -728,8 +728,34 @@ ONI.gantt = (function () {
       }
     }
 
+    /* タッチでスクロールが始まると pointercancel が来る。
+       その場合は変更を確定せず、見た目を元に戻すだけにする
+       （スマホで画面を撫でただけで日付が動いてしまうのを防ぐ）。 */
+    function cancelDrag() {
+      if (drag) {
+        drag.node.classList.remove("is-dragging");
+        drag.node.style.left = px(drag.left0);
+        drag.node.style.width = px(drag.width0);
+        drag = null;
+      }
+      if (groupDrag) {
+        groupDrag.node.classList.remove("is-groupdragging");
+        groupDrag = null;
+        clearDropMarkers();
+      }
+      if (rowDrag) {
+        rowDrag.node.classList.remove("is-rowdragging");
+        rowDrag = null;
+        clearDropMarkers();
+      }
+      if (createDrag) {
+        if (createDrag.ghost) createDrag.ghost.remove();
+        createDrag = null;
+      }
+    }
+
     root.addEventListener("pointerup", endDrag);
-    root.addEventListener("pointercancel", endDrag);
+    root.addEventListener("pointercancel", cancelDrag);
 
     root.addEventListener("click", function (ev) {
       if (suppressClick) { suppressClick = false; return; }
