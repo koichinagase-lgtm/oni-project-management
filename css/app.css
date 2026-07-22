@@ -154,6 +154,9 @@ body {
 
 .tabs { display: flex; gap: 2px; }
 .tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font: inherit;
   padding: 6px 14px;
   border: 0;
@@ -161,6 +164,18 @@ body {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  white-space: nowrap;
+}
+/* アイコンは4アプリ共通のトンマナ（線画・16px・stroke 1.8・丸端） */
+.tab svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .tab:hover { background: rgba(26, 26, 26, .05); }
 .tab.is-active { background: var(--oni-red); color: var(--oni-ivory); }
