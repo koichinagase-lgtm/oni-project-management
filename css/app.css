@@ -164,10 +164,6 @@ body {
 }
 .tab:hover { background: rgba(26, 26, 26, .05); }
 .tab.is-active { background: var(--oni-red); color: var(--oni-ivory); }
-/* 別アプリへのリンク（レシピ管理）: タブと同じ見た目のアンカー */
-a.tab { text-decoration: none; display: inline-flex; align-items: center; }
-a.tab.tab-link { color: var(--muted); }
-a.tab.tab-link:hover { color: var(--oni-red); background: rgba(140, 29, 35, .06); }
 
 .appbar-right { margin-left: auto; display: flex; gap: 8px; }
 
@@ -180,6 +176,10 @@ a.tab.tab-link:hover { color: var(--oni-red); background: rgba(140, 29, 35, .06)
   flex-direction: column;
 }
 .panel[hidden] { display: none; }
+
+/* 埋め込みアプリ（レシピ管理）のパネル: iframe が領域いっぱいに広がる */
+.panel-embed { padding: 0; }
+.embed-frame { flex: 1; width: 100%; border: 0; background: var(--rice-white); }
 
 .toolbar {
   flex: none;
