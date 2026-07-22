@@ -12,10 +12,19 @@
 
 ## 使い方
 
-デプロイ後は発行された URL を開き、会社のメールアドレスでログインするだけ。
+**本番はポータル経由**: https://oni-portal.vercel.app/project/
+ポータル（ワークスペース）のアカウントでログインしていればそのまま使える。
+このアプリ単体のログイン画面は廃止した（認証はポータルに統合。詳細は `../products/README.md`）。
+旧URL https://oni-project-management.vercel.app はポータルへリダイレクトされる。
+
+**デプロイ**: このフォルダを編集したら、ポータル側に同期してデプロイする。
+
+```
+cd ../products && ./sync.sh && npx vercel deploy --prod --yes
+```
 
 手元で動かして確認したいときは、このフォルダで次を実行し `http://127.0.0.1:8777` を開く。
-（Supabase に繋ぐため `file://` のダブルクリックでは動かない）
+（Supabase に繋ぐため `file://` のダブルクリックでは動かない。ローカルでは簡易ログインフォームが出る）
 
 ```
 python3 -m http.server 8777

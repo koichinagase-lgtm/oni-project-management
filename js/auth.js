@@ -1,9 +1,15 @@
-/* auth.js — ログインとワークスペースの入口
+/* auth.js — ワークスペース（ポータル）との認証統合版
  *
- * メールアドレスとパスワードでログインする。
- * ログインしただけでは中身は見えない。Supabase 側の pm_workspace_users に
- * 登録されている人だけが RLS を通過してデータを読める。
- * （@oni-co.jp は初回登録時に自動で参加。それ以外は管理者の招待制）
+ * ログイン画面はこのアプリにはもう無い。ポータル（/login）で
+ * メールアドレス＋パスワードのアカウントにログインすると、同じオリジンの
+ * localStorage に Supabase セッションが保存され、このアプリはそれをそのまま使う。
+ *
+ * データを守っているのは Supabase 側の RLS（pm_workspace_users に
+ * 登録されている人だけが読み書きできる）。役割（admin/editor/viewer）も
+ * pm_workspace_users の行から読む。
+ *
+ * ローカル開発（python3 -m http.server 等）ではポータルが無いので、
+ * 簡易ログインフォームを出す。
  */
 
 var ONI = window.ONI || {};
@@ -15,6 +21,9 @@ ONI.auth = (function () {
   var sb = null;          // Supabase クライアント
   var session = null;     // ログインセッション
   var me = null;          // pm_workspace_users の自分の行（role を含む）
+
+  var IS_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+    || location.protocol === "file:";
 
   function client() {
     if (!sb) {
@@ -39,10 +48,7 @@ ONI.auth = (function () {
     var m = String(message || "");
     if (/Invalid login credentials/i.test(m)) return "メールアドレスかパスワードが違います。";
     if (/Email not confirmed/i.test(m)) return "メールの確認がまだです。届いている確認メールのリンクを開いてください。";
-    if (/User already registered/i.test(m)) return "このメールアドレスは登録済みです。「ログイン」からお入りください。";
-    if (/Password should be at least/i.test(m)) return "パスワードは6文字以上にしてください。";
     if (/rate limit|too many/i.test(m)) return "試行が続いたため一時的に制限されています。少し時間をおいてください。";
-    if (/Unable to validate email/i.test(m)) return "メールアドレスの形式を確認してください。";
     return m;
   }
 
@@ -76,19 +82,30 @@ ONI.auth = (function () {
     return box;
   }
 
-  /**
-   * ログイン／新規登録のフォーム。
-   * @param {"signin"|"signup"} mode
-   */
-  function renderForm(mode, message) {
-    var signup = mode === "signup";
-    var box = card(
-      signup ? "アカウントを作成" : "プロジェクト管理",
-      signup
-        ? "会社のメールアドレスとパスワードを設定してください"
-        : "メールアドレスとパスワードでログインします"
-    );
+  function renderDenied(email) {
+    var box = card("アクセス権限がありません",
+      email + " はワークスペースに登録されていません。管理者に招待を依頼してください。");
+    var btn = el("button", "btn btn-ghost auth-btn", "別のアカウントでログイン");
+    btn.addEventListener("click", function () {
+      client().auth.signOut().then(function () { toPortalLogin(); });
+    });
+    box.appendChild(btn);
+  }
 
+  function renderLoading(text) {
+    card(text || "読み込み中…");
+  }
+
+  /** ポータルのログイン画面へ移動する */
+  function toPortalLogin() {
+    if (IS_LOCAL) { renderLocalForm(); return; }
+    location.href = "/login";
+  }
+
+  /* ローカル開発専用の簡易ログイン（本番ではポータルの /login を使う） */
+  function renderLocalForm(message) {
+    var box = card("ローカル開発ログイン",
+      "本番ではポータル（/login）からログインします");
     var form = el("div", "auth-form");
 
     var email = document.createElement("input");
@@ -100,69 +117,32 @@ ONI.auth = (function () {
     var pass = document.createElement("input");
     pass.type = "password";
     pass.className = "input";
-    pass.placeholder = signup ? "パスワード（6文字以上）" : "パスワード";
-    pass.autocomplete = signup ? "new-password" : "current-password";
+    pass.placeholder = "パスワード";
+    pass.autocomplete = "current-password";
 
-    var btn = el("button", "btn btn-primary auth-btn", signup ? "アカウントを作成" : "ログイン");
+    var btn = el("button", "btn btn-primary auth-btn", "ログイン");
     var note = el("p", "auth-note", message || "");
     if (message) note.className = "auth-note is-error";
 
-    function busy(on, label) {
-      btn.disabled = on;
-      btn.textContent = on ? label : (signup ? "アカウントを作成" : "ログイン");
-    }
-
-    function fail(msg) {
-      note.textContent = jpError(msg);
-      note.className = "auth-note is-error";
-      busy(false);
-    }
-
     function submit() {
-      var e = email.value.trim();
-      var p = pass.value;
-      if (!e) { email.focus(); return; }
-      if (!p) { pass.focus(); return; }
-      note.textContent = "";
-      note.className = "auth-note";
-
-      if (signup) {
-        busy(true, "作成中…");
-        client().auth.signUp({
-          email: e,
-          password: p,
-          options: { emailRedirectTo: window.location.origin + window.location.pathname }
-        }).then(function (res) {
-          if (res.error) { fail(res.error.message); return; }
-          if (res.data.session) {
-            window.location.reload();   // 確認不要の設定ならそのまま入れる
-            return;
-          }
-          // すでに登録済みのメールで登録しようとすると、Supabase は
-          // 「アカウントの有無を外部に漏らさない」ため成功したように返す。
-          // その場合 identities が空になるので、案内を出し分ける。
-          var known = res.data.user && res.data.user.identities
-            && res.data.user.identities.length === 0;
-          if (known) {
-            renderForm("signin",
-              "このメールアドレスは登録済みです。お使いのパスワードでログインしてください。"
-              + "（分からない場合は「パスワードを忘れた場合」から再設定できます）");
-            return;
-          }
-          box.innerHTML = "";
-          box.appendChild(el("h1", "auth-title", "確認メールを送りました"));
-          box.appendChild(el("p", "auth-sub",
-            e + " に確認メールを送りました。リンクを開くとログインできるようになります。"));
-        });
-      } else {
-        busy(true, "確認中…");
-        client().auth.signInWithPassword({ email: e, password: p }).then(function (res) {
-          if (res.error) { fail(res.error.message); return; }
-          window.location.reload();
-        });
-      }
+      if (!email.value.trim()) { email.focus(); return; }
+      if (!pass.value) { pass.focus(); return; }
+      btn.disabled = true;
+      btn.textContent = "確認中…";
+      client().auth.signInWithPassword({
+        email: email.value.trim(),
+        password: pass.value
+      }).then(function (res) {
+        if (res.error) {
+          note.textContent = jpError(res.error.message);
+          note.className = "auth-note is-error";
+          btn.disabled = false;
+          btn.textContent = "ログイン";
+          return;
+        }
+        window.location.reload();
+      });
     }
-
     btn.addEventListener("click", submit);
     function onKey(ev) {
       if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229) submit();
@@ -175,95 +155,14 @@ ONI.auth = (function () {
     form.appendChild(btn);
     box.appendChild(form);
     box.appendChild(note);
-
-    /* 下部の切り替えリンク */
-    var links = el("div", "auth-links");
-    var toggle = el("button", "auth-link",
-      signup ? "すでにアカウントをお持ちの方はログイン" : "はじめての方はアカウントを作成");
-    toggle.addEventListener("click", function () {
-      renderForm(signup ? "signin" : "signup");
-    });
-    links.appendChild(toggle);
-
-    if (!signup) {
-      var forgot = el("button", "auth-link", "パスワードを忘れた場合");
-      forgot.addEventListener("click", function () {
-        var e = email.value.trim();
-        if (!e) { note.textContent = "先にメールアドレスを入力してください。";
-          note.className = "auth-note is-error"; email.focus(); return; }
-        client().auth.resetPasswordForEmail(e, {
-          redirectTo: window.location.origin + window.location.pathname
-        }).then(function (res) {
-          if (res.error) { fail(res.error.message); return; }
-          note.textContent = e + " に再設定用のメールを送りました。";
-          note.className = "auth-note";
-        });
-      });
-      links.appendChild(forgot);
-    }
-    box.appendChild(links);
-
     setTimeout(function () { email.focus(); }, 0);
-  }
-
-  function renderDenied(email) {
-    var box = card("アクセス権限がありません",
-      email + " はこのワークスペースに登録されていません。管理者に招待を依頼してください。");
-    var btn = el("button", "btn btn-ghost auth-btn", "別のアカウントでログイン");
-    btn.addEventListener("click", function () {
-      client().auth.signOut().then(function () { renderForm("signin"); });
-    });
-    box.appendChild(btn);
-  }
-
-  /* パスワード再設定メールから戻ってきたときの、新しいパスワード入力画面 */
-  function renderNewPassword() {
-    var box = card("新しいパスワードを設定", "6文字以上で設定してください");
-    var form = el("div", "auth-form");
-    var pass = document.createElement("input");
-    pass.type = "password";
-    pass.className = "input";
-    pass.placeholder = "新しいパスワード";
-    pass.autocomplete = "new-password";
-    var btn = el("button", "btn btn-primary auth-btn", "設定する");
-    var note = el("p", "auth-note", "");
-
-    btn.addEventListener("click", function () {
-      if (!pass.value) { pass.focus(); return; }
-      btn.disabled = true;
-      btn.textContent = "設定中…";
-      client().auth.updateUser({ password: pass.value }).then(function (res) {
-        if (res.error) {
-          note.textContent = jpError(res.error.message);
-          note.className = "auth-note is-error";
-          btn.disabled = false;
-          btn.textContent = "設定する";
-          return;
-        }
-        window.location.href = window.location.origin + window.location.pathname;
-      });
-    });
-    pass.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) btn.click();
-    });
-
-    form.appendChild(pass);
-    form.appendChild(btn);
-    box.appendChild(form);
-    box.appendChild(note);
-    setTimeout(function () { pass.focus(); }, 0);
-  }
-
-  function renderLoading(text) {
-    card(text || "読み込み中…");
   }
 
   /* -------------------------------------------------------- セッション */
 
   /**
    * ログイン済みなら pm_workspace_users から自分の行を取る。
-   * 先に別システムでアカウントを作っていた人は user_id が未設定のことがあるため、
-   * 見つからなければメールアドレスでも照合する。
+   * 招待直後などで user_id が未設定のことがあるため、メールアドレスでも照合する。
    */
   function loadMe() {
     var c = client();
@@ -281,13 +180,6 @@ ONI.auth = (function () {
       })
       .then(function (row) {
         me = row;
-        // 紐付いていなければ、このタイミングで結びつけておく
-        if (row && !row.user_id) {
-          c.from("pm_workspace_users")
-            .update({ user_id: session.user.id })
-            .eq("id", row.id)
-            .then(function () {}, function () {});
-        }
         return me;
       });
   }
@@ -299,32 +191,32 @@ ONI.auth = (function () {
     }
     renderLoading("確認中…");
 
-    // パスワード再設定のリンクから来た場合はパスワード入力画面へ
-    var isRecovery = /type=recovery/.test(window.location.hash || "");
-
     client().auth.getSession().then(function (res) {
       session = res.data.session;
-      if (isRecovery && session) { renderNewPassword(); return; }
-      if (!session) { renderForm("signin"); return; }
+      if (!session) { toPortalLogin(); return; }
 
       loadMe().then(function (row) {
         if (!row) { renderDenied(session.user.email); return; }
-        // 最終ログイン時刻を控えておく（失敗しても利用には影響しない）
-        client().from("pm_workspace_users")
-          .update({ last_seen_at: new Date().toISOString() })
-          .eq("id", row.id).then(function () {}, function () {});
+        // 最終ログイン時刻を記録（RPC。失敗しても利用には影響しない）
+        client().rpc("pm_touch_last_seen").then(function () {}, function () {});
         showApp();
         onReady(client(), session, me);
       });
     });
 
     client().auth.onAuthStateChange(function (event) {
-      if (event === "SIGNED_OUT") window.location.reload();
+      if (event === "SIGNED_OUT" && !signingOut) toPortalLogin();
     });
   }
 
+  var signingOut = false;
   function signOut() {
-    client().auth.signOut().then(function () { window.location.reload(); });
+    signingOut = true;
+    client().auth.signOut().then(function () {
+      // ポータルのセッションCookieも破棄する
+      if (IS_LOCAL) { window.location.reload(); return; }
+      location.href = "/api/logout";
+    });
   }
 
   return {
