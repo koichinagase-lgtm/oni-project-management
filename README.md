@@ -12,10 +12,10 @@
 
 ## 使い方
 
-`index.html` をダブルクリックしてブラウザで開くだけ。ビルドもインストールも不要。
+デプロイ後は発行された URL を開き、会社のメールアドレスでログインするだけ。
 
-うまく表示されない場合（ブラウザがローカルファイルを制限しているとき）は、
-このフォルダで次を実行し `http://127.0.0.1:8777` を開く。
+手元で動かして確認したいときは、このフォルダで次を実行し `http://127.0.0.1:8777` を開く。
+（Supabase に繋ぐため `file://` のダブルクリックでは動かない）
 
 ```
 python3 -m http.server 8777
@@ -145,44 +145,101 @@ Todoist風の2ペイン構成。
 - ステータス・配信媒体の編集は、絞り込みメニューの選択肢にも即反映される
 - 選択系は値の横の「＋」でも選択肢をその場で追加できる
 
-## データ
+## データと共有
 
-ブラウザの localStorage に保存される（**このPC・このブラウザの中だけ**）。
-複数人で共有するのは Phase 2（下記）から。
+データは **Supabase**（プロジェクト `abweoowonthzpuoselix`）に保存され、メンバー全員で共有される。
+Realtime を有効にしてあるので、他の人の変更はリロードなしで画面に反映される。
+
+画面側は今までどおり同期的に動く。`js/store.js` がメモリ上のキャッシュを持ち、
+「先に画面を更新 → 裏で Supabase に書き込み → Realtime で他の人の変更を取り込む」
+という流れで橋渡ししている。
 
 初回起動時は既定グループ（商品開発 / 販促・イベント / SNS投稿 / 撮影・素材準備）だけが入っており、
 名前・色の変更や追加・削除は自由。
 
-（データの書き出し／読み込みは Phase 2 の共有機能に統合する予定のため、現在ボタンは非表示。
-`js/store.js` の `exportJSON` / `importJSON` は残してある。）
+### テーブル
+
+既存の社内システム（レシピ・アレルゲン・商談など）と混ざらないよう `pm_` を付けている。
+
+| テーブル | 内容 |
+|---|---|
+| `pm_workspace_users` | ログインできる人とロール（admin / editor / viewer） |
+| `pm_members` | 担当者マスタ |
+| `pm_groups` | ガント縦軸のグループ |
+| `pm_items` | ガントのバー（`detail` は jsonb） |
+| `pm_tasks` | タスク（`owner` は担当者IDの配列） |
+| `pm_events` | 季節イベント・出店 |
+| `pm_ideas` | アイデアmemo |
+| `pm_prop_defs` | カスタムプロパティ定義 |
+| `pm_settings` | 組み込みプロパティの設定（1行） |
+
+## ログインとメンバー管理
+
+パスワードは扱わず、**メールに届くリンク**でログインする（マジックリンク）。
+
+- **@oni-co.jp のアカウント**は初回ログイン時に自動でワークスペースに参加する
+- それ以外のドメインは、管理者が `pm_workspace_users` にメールを登録した場合のみ参加できる
+- 登録されていない人は、ログインできてもデータは一切見えない（「アクセス権限がありません」と表示）
+
+権限は3段階。RLS（行レベルセキュリティ）でデータベース側から強制している。
+
+| ロール | できること |
+|---|---|
+| `admin` | 全データの読み書き＋メンバーの追加・権限変更・削除 |
+| `editor` | 全データの読み書き |
+| `viewer` | 閲覧のみ |
+
+`js/supabase-config.js` に置いてある publishable key は**ブラウザに公開して良い種類のキー**で、
+データを守っているのは RLS のほう。未ログイン状態では読み取り0件・書き込み拒否になることを確認済み。
+
+## デプロイ（Vercel）
+
+ビルド不要の静的サイトなので、リポジトリをそのまま Vercel に繋げばよい。
+`vercel.json` と `.vercelignore` は用意済み（社内の xlsx は公開対象から除外している）。
+
+初回だけ次の手順が必要（GitHub と Vercel の認証はご自身の操作が要る）。
+
+```bash
+# 1. GitHub に空のプライベートリポジトリを作る（例: oni-project-management）
+
+# 2. このフォルダから push する
+cd "~/Documents/Claude/project management"
+git remote add origin https://github.com/<ユーザー名>/oni-project-management.git
+git branch -M main
+git push -u origin main
+```
+
+3. [vercel.com/new](https://vercel.com/new) でそのリポジトリを Import する
+   - Framework Preset: **Other**（ビルドコマンドなし）
+   - Root Directory: そのまま
+4. Deploy を押すと URL が発行される
+
+5. 発行された URL を Supabase に登録する（メールのリンクから戻れるようにするため）
+   - Supabase ダッシュボード → Authentication → URL Configuration
+   - **Site URL** に本番URL、**Redirect URLs** に本番URLを追加
+
+以降は `git push` するたびに自動でデプロイされる。
 
 ## ファイル構成
 
 ```
-index.html      画面の骨組み
-css/app.css     ブランドカラー・レイアウト
-js/model.js     スキーマ定義、日付ユーティリティ、祝日表、12色パレット
-js/ui.js        共通UI部品（カラーピッカー）
-js/store.js     データの保存・取得（Phase 2 でここだけ差し替える）
-js/gantt.js     タイムライン描画とドラッグ操作
-js/detail.js    詳細パネル
-js/app.js       状態管理とイベント配線
+index.html               画面の骨組み
+vercel.json              デプロイ設定（セキュリティヘッダなど）
+css/app.css              ブランドカラー・レイアウト
+js/supabase-config.js    接続先とキー
+js/auth.js               ログイン画面とセッション管理
+js/model.js              スキーマ定義、日付ユーティリティ、祝日表、12色パレット
+js/ui.js                 共通UI部品（カラーピッカー・担当者ピッカー）
+js/store.js              データの保存・取得（Supabase との同期はここに集約）
+js/gantt.js              タイムライン描画とドラッグ操作
+js/detail.js             詳細パネル
+js/app.js                状態管理とイベント配線
 ```
 
 ビルドツールを使わないため、ES modules ではなく classic script と
 グローバル名前空間 `ONI.*` で分割している。
 
-## Phase 2（未着手）: 共有とメンバー管理
-
-1. Supabase プロジェクト `abweoowonthzpuoselix` にテーブルを作成
-   （`groups`, `items`, `tasks`, `ideas`, `members`）
-2. 認証はメールのマジックリンク（パスワードを扱わない）
-3. RLS でログイン済みメンバーのみ読み書き。role は `admin` / `editor` / `viewer`
-4. `js/store.js` を Supabase 版に差し替え、Realtime で同時編集を反映
-5. 静的ホスティング（Netlify Drop 等）にデプロイ
-
-`js/store.js` の公開メソッド（`items` / `getItem` / `createItem` / `updateItem` /
-`deleteItem` / `subscribe` など）の名前と引数を変えなければ、UI 側の変更は不要。
+起動の流れは `auth.start()` → `store.setClient()` → `store.init()` → `app.init()`。
 
 ## 祝日データ
 
