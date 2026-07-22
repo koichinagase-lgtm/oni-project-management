@@ -177,10 +177,6 @@ body {
 }
 .panel[hidden] { display: none; }
 
-/* 埋め込みアプリ（レシピ管理）のパネル: iframe が領域いっぱいに広がる */
-.panel-embed { padding: 0; }
-.embed-frame { flex: 1; width: 100%; border: 0; background: var(--rice-white); }
-
 .toolbar {
   flex: none;
   display: flex;

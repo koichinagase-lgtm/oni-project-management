@@ -1273,11 +1273,6 @@ ONI.app = (function () {
     document.querySelectorAll(".panel").forEach(function (p) {
       p.hidden = p.dataset.panel !== name;
     });
-    // レシピ管理は別アプリ(/recipe/)を同オリジンで埋め込む。初回表示時にだけ読み込む
-    if (name === "recipe") {
-      var frame = $("recipe-frame");
-      if (frame && !frame.getAttribute("src")) frame.setAttribute("src", "/recipe/");
-    }
     saveUI();
     renderAll();
   }
