@@ -1449,17 +1449,13 @@ ONI.app = (function () {
       toast("メモを追加しました");
     });
 
-    /* ログイン中のアカウント表示とログアウト */
+    /* ログイン中のアカウント表示（ログアウトはワークスペース側にある） */
     var me = ONI.auth.me();
     if (me) {
       var roleLabel = { admin: "管理者", editor: "編集可", viewer: "閲覧のみ" }[me.role] || me.role;
       $("me-badge").textContent = me.email + "（" + roleLabel + "）";
       $("me-badge").title = "ログイン中のアカウント";
     }
-    $("btn-signout").addEventListener("click", function () {
-      if (confirm("ログアウトしますか？")) ONI.auth.signOut();
-    });
-
     /* 担当者マスタ */
     function addMember() {
       var name = $("member-name").value.trim();
