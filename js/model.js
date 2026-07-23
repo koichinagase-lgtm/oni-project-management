@@ -307,12 +307,24 @@ ONI.model = (function () {
     var t = Object.assign({}, raw);
     t.id = t.id || uuid();
     t.item_id = t.item_id || null;
+    t.parent_id = t.parent_id || null;         // 子タスクの親（null=トップレベル）
+    t.task_group_id = t.task_group_id || null; // タスク独自グループ（null=未分類）
+    t.note = t.note || "";                     // テキストメモ
     t.title = (t.title || "").trim() || "（無題のタスク）";
     t.done = !!t.done;
     t.owner = memberList(t.owner);
     t.due_date = t.due_date || "";
     if (typeof t.sort_order !== "number") t.sort_order = 0;
     return t;
+  }
+
+  function normalizeTaskGroup(raw) {
+    var g = Object.assign({}, raw);
+    g.id = g.id || uuid();
+    g.name = (g.name || "").trim() || "新しいグループ";
+    g.color = g.color || null;
+    if (typeof g.sort_order !== "number") g.sort_order = 0;
+    return g;
   }
 
   function normalizeIdea(raw) {
@@ -369,6 +381,7 @@ ONI.model = (function () {
     normalizeItem: normalizeItem,
     normalizeEvent: normalizeEvent,
     normalizeTask: normalizeTask,
+    normalizeTaskGroup: normalizeTaskGroup,
     durationDays: durationDays
   };
 })();

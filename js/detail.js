@@ -785,7 +785,8 @@ ONI.detail = (function () {
 
   /* この項目にぶら下がるタスクのチェックリスト。ここでの変更はタスク管理ページにも反映される。 */
   function renderTasks(body, it) {
-    var list = ONI.store.tasksForItem(it.id);
+    // 子タスク（parent_id あり）は親の下でのみ扱うため、ここでは出さない
+    var list = ONI.store.tasksForItem(it.id).filter(function (t) { return !t.parent_id; });
     var doneN = list.filter(function (t) { return t.done; }).length;
     body.appendChild(el("div", "d-section-title",
       "タスク" + (list.length ? "（" + doneN + "/" + list.length + "）" : "")));

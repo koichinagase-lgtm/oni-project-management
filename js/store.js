@@ -28,7 +28,7 @@ ONI.store = (function () {
 
   var state = {
     groups: [], items: [], tasks: [], events: [], ideas: [],
-    propDefs: [], fields: null, members: []
+    propDefs: [], fields: null, members: [], taskGroups: []
   };
   var listeners = [];
 
@@ -94,8 +94,14 @@ ONI.store = (function () {
     return {
       id: t.id, item_id: t.item_id || null, title: t.title, done: !!t.done,
       owner: t.owner || [], due_date: t.due_date || null,
+      parent_id: t.parent_id || null, task_group_id: t.task_group_id || null,
+      note: t.note || "",
       sort_order: t.sort_order || 0, updated_at: new Date().toISOString()
     };
+  }
+  function taskGroupRow(g) {
+    return { id: g.id, name: g.name, color: g.color || null,
+      sort_order: g.sort_order || 0, updated_at: new Date().toISOString() };
   }
   function groupRow(g) {
     return { id: g.id, name: g.name, color: g.color, sort_order: g.sort_order || 0,
@@ -154,7 +160,8 @@ ONI.store = (function () {
       sb.from("pm_ideas").select("*"),
       sb.from("pm_members").select("*"),
       sb.from("pm_prop_defs").select("*"),
-      sb.from("pm_settings").select("*").eq("id", 1).maybeSingle()
+      sb.from("pm_settings").select("*").eq("id", 1).maybeSingle(),
+      sb.from("pm_task_groups").select("*")
     ]).then(function (r) {
       var err = r.filter(function (x) { return x.error; })[0];
       if (err) {
@@ -169,6 +176,7 @@ ONI.store = (function () {
       state.members = (r[5].data || []).map(M.normalizeMember);
       state.propDefs = (r[6].data || []).map(M.normalizePropDef);
       state.fields = normalizeFields(r[7].data ? r[7].data.fields : null);
+      state.taskGroups = (r[8].data || []).map(M.normalizeTaskGroup);
 
       // まっさらなワークスペースなら既定グループを用意する
       if (!state.groups.length) {
@@ -195,7 +203,8 @@ ONI.store = (function () {
     pm_events: { key: "events", norm: M.normalizeEvent },
     pm_ideas: { key: "ideas", norm: M.normalizeIdea },
     pm_members: { key: "members", norm: M.normalizeMember },
-    pm_prop_defs: { key: "propDefs", norm: M.normalizePropDef }
+    pm_prop_defs: { key: "propDefs", norm: M.normalizePropDef },
+    pm_task_groups: { key: "taskGroups", norm: M.normalizeTaskGroup }
   };
 
   var repaint = null;
@@ -445,6 +454,13 @@ ONI.store = (function () {
       .sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
   }
 
+  /** 指定タスクの子タスク（sort_order 昇順） */
+  function subtasksOf(parentId) {
+    return state.tasks
+      .filter(function (t) { return t.parent_id === parentId; })
+      .sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+  }
+
   function createTask(patch) {
     var maxOrder = state.tasks.reduce(function (m, t) { return Math.max(m, t.sort_order || 0); }, 0);
     var t = M.normalizeTask(Object.assign({
@@ -469,8 +485,52 @@ ONI.store = (function () {
   }
 
   function deleteTask(id) {
-    state.tasks = state.tasks.filter(function (t) { return t.id !== id; });
+    // 子タスクも一緒に消す（1段のみ。孫は作れない仕様）
+    var kids = state.tasks.filter(function (t) { return t.parent_id === id; });
+    kids.forEach(function (k) { remove("pm_tasks", k.id, "タスク"); });
+    var removeIds = [id].concat(kids.map(function (k) { return k.id; }));
+    state.tasks = state.tasks.filter(function (t) { return removeIds.indexOf(t.id) < 0; });
     remove("pm_tasks", id, "タスク");
+    emit();
+  }
+
+  /* ------------------------------------------- タスク独自グループ */
+
+  function taskGroups() {
+    return state.taskGroups.slice().sort(function (a, b) {
+      return (a.sort_order || 0) - (b.sort_order || 0);
+    });
+  }
+  function getTaskGroup(id) {
+    return state.taskGroups.filter(function (g) { return g.id === id; })[0] || null;
+  }
+  function createTaskGroup(patch) {
+    var maxOrder = state.taskGroups.reduce(function (m, g) { return Math.max(m, g.sort_order || 0); }, 0);
+    var g = M.normalizeTaskGroup(Object.assign({ sort_order: maxOrder + 10 }, patch));
+    state.taskGroups.push(g);
+    push("pm_task_groups", taskGroupRow(g), "タスクグループ");
+    emit();
+    return g;
+  }
+  function updateTaskGroup(id, patch) {
+    var g = getTaskGroup(id);
+    if (!g) return null;
+    var next = M.normalizeTaskGroup(Object.assign({}, g, patch));
+    state.taskGroups[state.taskGroups.indexOf(g)] = next;
+    push("pm_task_groups", taskGroupRow(next), "タスクグループ");
+    emit();
+    return next;
+  }
+  function deleteTaskGroup(id) {
+    // グループを消しても、属していたタスクは「未分類」に戻るだけ（タスクは消さない）
+    state.tasks.forEach(function (t) {
+      if (t.task_group_id === id) {
+        t.task_group_id = null;
+        push("pm_tasks", taskRowOf(t), "タスク");
+      }
+    });
+    state.taskGroups = state.taskGroups.filter(function (g) { return g.id !== id; });
+    remove("pm_task_groups", id, "タスクグループ");
     emit();
   }
 
@@ -861,9 +921,16 @@ ONI.store = (function () {
 
     tasks: tasks,
     tasksForItem: tasksForItem,
+    subtasksOf: subtasksOf,
     createTask: createTask,
     updateTask: updateTask,
     deleteTask: deleteTask,
+
+    taskGroups: taskGroups,
+    getTaskGroup: getTaskGroup,
+    createTaskGroup: createTaskGroup,
+    updateTaskGroup: updateTaskGroup,
+    deleteTaskGroup: deleteTaskGroup,
 
     events: events,
     getEvent: getEvent,
