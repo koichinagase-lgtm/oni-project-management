@@ -958,11 +958,9 @@ ONI.app = (function () {
     titleIn.className = "td-title";
     titleIn.value = t.title;
     titleIn.dataset.fkey = "t:" + t.id + ":title";
-    var timer;
-    titleIn.addEventListener("input", function () {
-      clearTimeout(timer);
-      timer = setTimeout(function () { ONI.store.updateTask(t.id, { title: titleIn.value }); }, 350);
-    });
+    bindDebouncedSave(titleIn, function () {
+      ONI.store.updateTask(t.id, { title: titleIn.value });
+    }, 350);
     bodyEl.appendChild(titleIn);
 
     var meta = document.createElement("div");
@@ -1019,12 +1017,9 @@ ONI.app = (function () {
       note.rows = 2;
       note.value = t.note || "";
       note.dataset.fkey = "t:" + t.id + ":note";
-      var nt;
-      note.addEventListener("input", function () {
-        clearTimeout(nt);
-        autoGrow(note);
-        nt = setTimeout(function () { ONI.store.updateTask(t.id, { note: note.value }); }, 400);
-      });
+      bindDebouncedSave(note, function () {
+        ONI.store.updateTask(t.id, { note: note.value });
+      }, 400, function () { autoGrow(note); });
       expand.appendChild(note);
       setTimeout(function () { autoGrow(note); }, 0);
     }
@@ -1081,11 +1076,9 @@ ONI.app = (function () {
     titleIn.className = "td-title td-title-sm";
     titleIn.value = k.title;
     titleIn.dataset.fkey = "t:" + k.id + ":title";
-    var timer;
-    titleIn.addEventListener("input", function () {
-      clearTimeout(timer);
-      timer = setTimeout(function () { ONI.store.updateTask(k.id, { title: titleIn.value }); }, 350);
-    });
+    bindDebouncedSave(titleIn, function () {
+      ONI.store.updateTask(k.id, { title: titleIn.value });
+    }, 350);
     row.appendChild(titleIn);
 
     var del = document.createElement("button");
@@ -1132,6 +1125,23 @@ ONI.app = (function () {
   function autoGrow(el) {
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
+  }
+
+  /**
+   * 入力を遅延保存する。IME変換中（isComposing）は保存＝再描画を保留し、
+   * 変換確定（compositionend）後にだけ発火する。これで変換途中に
+   * 再描画が入って変換が中断・確定されるのを防ぐ。
+   * onInput は入力のたびに毎回呼ぶ副作用（自動リサイズ等）用。
+   */
+  function bindDebouncedSave(el, save, delay, onInput) {
+    var timer;
+    function schedule() { clearTimeout(timer); timer = setTimeout(save, delay); }
+    el.addEventListener("input", function (e) {
+      if (onInput) onInput();
+      if (e.isComposing) return;   // 変換中は保存しない（再描画も起こさない）
+      schedule();
+    });
+    el.addEventListener("compositionend", schedule); // 変換確定で保存
   }
 
   /** 期限チップ。クリックで日付ピッカーが開く。 */
