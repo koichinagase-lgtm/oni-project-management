@@ -22,7 +22,7 @@ ONI.app = (function () {
     taskView: "today",  // inbox / today / upcoming / all / done / item / member / group
     taskItem: null,     // taskView=item のときの対象（"__none"=未割り当て）
     taskMember: null,   // taskView=member のときの対象（"__none"=担当者なし）
-    taskGroup: null,    // taskView=group のときの対象（"__none"=未分類）
+    taskGroup: null,    // taskView=group のときの対象（"__none"=タグなし。UI表記は「タグ」）
     taskHideEmpty: false // タスクが1件もない項目・INBOXをナビから隠す
   };
 
@@ -758,16 +758,16 @@ ONI.app = (function () {
       });
     }
 
-    /* --- タスク独自グループ（ガントのグループとは別） --- */
+    /* --- タスクのタグ（ガントのグループとは別。UI表記は「タグ」） --- */
     var tgHead = document.createElement("div");
     tgHead.className = "task-nav-head";
-    tgHead.appendChild(Object.assign(document.createElement("span"), { textContent: "グループ" }));
+    tgHead.appendChild(Object.assign(document.createElement("span"), { textContent: "タグ" }));
     var addG = document.createElement("button");
     addG.className = "task-nav-toggle";
     addG.textContent = "＋ 追加";
-    addG.title = "タスクのグループを追加";
+    addG.title = "タグを追加";
     addG.addEventListener("click", function () {
-      var name = prompt("新しいグループ名を入力してください");
+      var name = prompt("新しいタグ名を入力してください");
       if (name == null || !name.trim()) return;
       var g = ONI.store.createTaskGroup({ name: name.trim() });
       ui.taskView = "group"; ui.taskGroup = g.id; ui.taskItem = null; ui.taskMember = null;
@@ -779,7 +779,7 @@ ONI.app = (function () {
     var noGroupCount = open.filter(function (t) { return !t.task_group_id; }).length;
     if (noGroupCount || (ui.taskView === "group" && ui.taskGroup === "__none")) {
       var ng = navBtn(ui.taskView === "group" && ui.taskGroup === "__none",
-        "未分類", noGroupCount, function () {
+        "タグなし", noGroupCount, function () {
           ui.taskView = "group"; ui.taskGroup = "__none"; ui.taskItem = null; ui.taskMember = null;
           taskOpenAdd = null; saveUI(); renderTasks();
         });
@@ -807,15 +807,15 @@ ONI.app = (function () {
       ren.className = "task-nav-tool"; ren.textContent = "✎"; ren.title = "名前を変更";
       ren.addEventListener("click", function (e) {
         e.stopPropagation();
-        var name = prompt("グループ名を変更", g.name);
+        var name = prompt("タグ名を変更", g.name);
         if (name == null || !name.trim()) return;
         ONI.store.updateTaskGroup(g.id, { name: name.trim() });
       });
       var delb = document.createElement("button");
-      delb.className = "task-nav-tool danger"; delb.textContent = "×"; delb.title = "グループを削除";
+      delb.className = "task-nav-tool danger"; delb.textContent = "×"; delb.title = "タグを削除";
       delb.addEventListener("click", function (e) {
         e.stopPropagation();
-        if (!confirm("グループ「" + g.name + "」を削除しますか？\n（中のタスクは消えず「未分類」に戻ります）")) return;
+        if (!confirm("タグ「" + g.name + "」を削除しますか？\n（中のタスクは消えず「タグなし」に戻ります）")) return;
         if (ui.taskGroup === g.id) { ui.taskView = "all"; ui.taskGroup = null; }
         ONI.store.deleteTaskGroup(g.id);
         saveUI(); renderTasks();
@@ -843,7 +843,7 @@ ONI.app = (function () {
       title = ui.taskMember === "__none" ? "担当者なし"
         : (ONI.store.memberName(ui.taskMember) || "");
     } else if (ui.taskView === "group") {
-      title = ui.taskGroup === "__none" ? "未分類"
+      title = ui.taskGroup === "__none" ? "タグなし"
         : ((ONI.store.getTaskGroup(ui.taskGroup) || {}).name || "");
     } else {
       title = titleMap[ui.taskView];
@@ -971,7 +971,7 @@ ONI.app = (function () {
     // その項目専用のセクションでは項目チップは冗長なので出さない
     var itemBound = sec.itemId || (ui.taskView === "item" && ui.taskItem !== "__none");
     if (!itemBound) meta.appendChild(tdItemChip(t));
-    // グループビュー中はグループチップは冗長なので出さない
+    // タグビュー中はタグチップは冗長なので出さない
     var groupBound = ui.taskView === "group" && ui.taskGroup !== "__none";
     if (!groupBound) meta.appendChild(tdGroupChip(t));
 
@@ -1097,7 +1097,7 @@ ONI.app = (function () {
     return row;
   }
 
-  /** グループチップ。透明の select を重ねてクリックで割り当て変更できる。 */
+  /** タグチップ。透明の select を重ねてクリックで割り当て変更できる。 */
   function tdGroupChip(t) {
     var g = t.task_group_id ? ONI.store.getTaskGroup(t.task_group_id) : null;
     var chip = document.createElement("span");
@@ -1108,13 +1108,13 @@ ONI.app = (function () {
       chip.appendChild(dot);
     }
     chip.appendChild(Object.assign(document.createElement("span"),
-      { textContent: g ? g.name : "グループなし" }));
+      { textContent: g ? g.name : "タグなし" }));
 
     var sel = document.createElement("select");
     sel.className = "td-chip-sel";
-    sel.title = "グループに割り当てる";
+    sel.title = "タグに割り当てる";
     var ph = document.createElement("option");
-    ph.value = ""; ph.textContent = "グループなし";
+    ph.value = ""; ph.textContent = "タグなし";
     sel.appendChild(ph);
     ONI.store.taskGroups().forEach(function (x) {
       var o = document.createElement("option");
