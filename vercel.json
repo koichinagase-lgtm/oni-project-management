@@ -3,7 +3,7 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "destination": "https://oni-portal.vercel.app/project/",
+      "destination": "https://oni-workspace.vercel.app/project/",
       "permanent": false
     }
   ]

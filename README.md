@@ -12,7 +12,7 @@
 
 ## 使い方
 
-**本番はポータル経由**: https://oni-portal.vercel.app/project/
+**本番はポータル経由**: https://oni-workspace.vercel.app/project/
 ポータル（ワークスペース）のアカウントでログインしていればそのまま使える。
 このアプリ単体のログイン画面は廃止した（認証はポータルに統合。詳細は `../products/README.md`）。
 旧URL https://oni-project-management.vercel.app はポータルへリダイレクトされる。
