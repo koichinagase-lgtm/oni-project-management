@@ -1038,7 +1038,7 @@ body {
   margin-top: 2px;
   transition: opacity .12s;
 }
-.td-row:hover .td-del { opacity: 1; }
+.td-row:hover .td-del, .td-subrow:hover .td-del { opacity: 1; }
 .td-del:hover { background: var(--oni-red); color: var(--oni-ivory); }
 
 /* クイック追加 */

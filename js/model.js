@@ -310,7 +310,7 @@ ONI.model = (function () {
     t.parent_id = t.parent_id || null;         // 子タスクの親（null=トップレベル）
     t.task_group_id = t.task_group_id || null; // タスク独自グループ（null=未分類）
     t.note = t.note || "";                     // テキストメモ
-    t.title = (t.title || "").trim() || "（無題のタスク）";
+    t.title = (t.title || "").trim();          // 空のままでも可（入力欄にプレースホルダを出す）
     t.done = !!t.done;
     t.owner = memberList(t.owner);
     t.due_date = t.due_date || "";

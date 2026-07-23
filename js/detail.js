@@ -831,11 +831,11 @@ ONI.detail = (function () {
     title.type = "text";
     title.className = "d-task-title";
     title.value = t.title;
+    title.placeholder = "タスク名";
     var timer;
-    title.addEventListener("input", function () {
-      clearTimeout(timer);
-      timer = setTimeout(function () { ONI.store.updateTask(t.id, { title: title.value }); }, 350);
-    });
+    function saveTitle() { clearTimeout(timer); timer = setTimeout(function () { ONI.store.updateTask(t.id, { title: title.value }); }, 350); }
+    title.addEventListener("input", function (e) { if (!e.isComposing) saveTitle(); }); // IME変換中は保存しない
+    title.addEventListener("compositionend", saveTitle);
     rowEl.appendChild(title);
 
     rowEl.appendChild(ONI.ui.memberSelect(t.owner, function (v) {

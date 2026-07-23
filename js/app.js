@@ -957,6 +957,7 @@ ONI.app = (function () {
     titleIn.type = "text";
     titleIn.className = "td-title";
     titleIn.value = t.title;
+    titleIn.placeholder = "タスク名";
     titleIn.dataset.fkey = "t:" + t.id + ":title";
     bindDebouncedSave(titleIn, function () {
       ONI.store.updateTask(t.id, { title: titleIn.value });
@@ -1033,10 +1034,10 @@ ONI.app = (function () {
       addSub.textContent = "＋ サブタスク";
       addSub.addEventListener("click", function () {
         taskSubOpen[t.id] = true;
-        var nk = ONI.store.createTask({ title: "（サブタスク）", parent_id: t.id, item_id: t.item_id || null });
+        var nk = ONI.store.createTask({ title: "", parent_id: t.id, item_id: t.item_id || null });
         renderTasks();
         var el = $("task-main").querySelector('[data-fkey="t:' + nk.id + ':title"]');
-        if (el) { el.focus(); el.select(); }
+        if (el) el.focus();
       });
       subWrap.appendChild(addSub);
       expand.appendChild(subWrap);
@@ -1075,10 +1076,22 @@ ONI.app = (function () {
     titleIn.type = "text";
     titleIn.className = "td-title td-title-sm";
     titleIn.value = k.title;
+    titleIn.placeholder = "サブタスク名";
     titleIn.dataset.fkey = "t:" + k.id + ":title";
     bindDebouncedSave(titleIn, function () {
       ONI.store.updateTask(k.id, { title: titleIn.value });
     }, 350);
+    // Enter で同じ親に次のサブタスクを作成
+    titleIn.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        ONI.store.updateTask(k.id, { title: titleIn.value }); // 直前の入力を確定保存
+        var nk = ONI.store.createTask({ title: "", parent_id: k.parent_id, item_id: k.item_id || null });
+        renderTasks();
+        var el = $("task-main").querySelector('[data-fkey="t:' + nk.id + ':title"]');
+        if (el) el.focus();
+      }
+    });
     row.appendChild(titleIn);
 
     var del = document.createElement("button");
