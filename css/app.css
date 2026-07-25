@@ -431,8 +431,8 @@ body {
 .member-chip.is-empty { color: var(--muted); }
 .member-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 複数人はアバターを少し重ねて並べる */
-.member-chip-avs { display: inline-flex; flex: none; }
-.member-chip-avs .member-av + .member-av { margin-left: -6px; box-shadow: 0 0 0 1.5px var(--surface); }
+/* 複数人のときは重ねず、少し間隔をあけて並べる */
+.member-chip-avs { display: inline-flex; flex: none; gap: 3px; }
 
 .member-pop {
   position: fixed;
