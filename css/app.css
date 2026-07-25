@@ -430,9 +430,10 @@ body {
 .member-chip:hover { border-color: var(--line); }
 .member-chip.is-empty { color: var(--muted); }
 .member-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 複数人はアバターを少し重ねて並べる */
-/* 複数人のときは重ねず、少し間隔をあけて並べる */
-.member-chip-avs { display: inline-flex; flex: none; gap: 3px; }
+/* 複数人は「アイコン＋名前」を1組にして、担当者ごとに間をあけて並べる */
+.member-chip-list { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.member-chip-one { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.member-chip-more { color: var(--muted); white-space: nowrap; }
 
 .member-pop {
   position: fixed;

@@ -186,18 +186,23 @@ ONI.ui = (function () {
         textContent: opts.placeholder || "担当者なし"
       }));
     } else {
-      var avs = document.createElement("span");
-      avs.className = "member-chip-avs";
-      ids.slice(0, 3).forEach(function (id) {
-        avs.appendChild(memberAvatar(ONI.store.getMember(id)));
+      // 担当者ごとに「アイコン＋名前」をひとまとまりにして並べる
+      var list = document.createElement("span");
+      list.className = "member-chip-list";
+      var shown = ids.slice(0, 3);
+      shown.forEach(function (id) {
+        var one = document.createElement("span");
+        one.className = "member-chip-one";
+        one.appendChild(memberAvatar(ONI.store.getMember(id)));
+        one.appendChild(Object.assign(document.createElement("span"),
+          { className: "member-chip-name", textContent: ONI.store.memberName(id) }));
+        list.appendChild(one);
       });
-      chip.appendChild(avs);
-      chip.appendChild(Object.assign(document.createElement("span"), {
-        className: "member-chip-name",
-        textContent: ids.length <= 2
-          ? ONI.store.memberNames(ids)
-          : ONI.store.memberName(ids[0]) + " 他" + (ids.length - 1) + "人"
-      }));
+      if (ids.length > shown.length) {
+        list.appendChild(Object.assign(document.createElement("span"),
+          { className: "member-chip-more", textContent: "他" + (ids.length - shown.length) + "人" }));
+      }
+      chip.appendChild(list);
     }
 
     attachPopover(chip, "member-pop", function (pop) {
