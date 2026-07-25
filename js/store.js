@@ -28,8 +28,11 @@ ONI.store = (function () {
 
   var state = {
     groups: [], items: [], tasks: [], events: [], ideas: [],
-    propDefs: [], fields: null, members: [], taskGroups: []
+    propDefs: [], fields: null, members: [], taskGroups: [],
+    profiles: [],       // pm_workspace_users（表示名・アイコン・担当者紐付け）
+    notifications: []   // 自分あての通知
   };
+  var myEmail = "";     // ログイン中のメールアドレス（通知の送り主判定に使う）
   var listeners = [];
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -146,7 +149,7 @@ ONI.store = (function () {
     return f;
   }
 
-  function setClient(client) { sb = client; }
+  function setClient(client, email) { sb = client; myEmail = (email || "").toLowerCase(); }
 
   /** Supabase から全件読み込む。読み終わったら onDone を呼ぶ。 */
   function init(onDone) {
@@ -161,7 +164,9 @@ ONI.store = (function () {
       sb.from("pm_members").select("*"),
       sb.from("pm_prop_defs").select("*"),
       sb.from("pm_settings").select("*").eq("id", 1).maybeSingle(),
-      sb.from("pm_task_groups").select("*")
+      sb.from("pm_task_groups").select("*"),
+      sb.from("pm_workspace_users").select("id, email, display_name, avatar, member_id"),
+      sb.from("pm_notifications").select("*").order("created_at", { ascending: false }).limit(100)
     ]).then(function (r) {
       var err = r.filter(function (x) { return x.error; })[0];
       if (err) {
@@ -177,6 +182,8 @@ ONI.store = (function () {
       state.propDefs = (r[6].data || []).map(M.normalizePropDef);
       state.fields = normalizeFields(r[7].data ? r[7].data.fields : null);
       state.taskGroups = (r[8].data || []).map(M.normalizeTaskGroup);
+      state.profiles = (r[9].data || []);
+      state.notifications = (r[10].data || []);
 
       // まっさらなワークスペースなら既定グループを用意する
       if (!state.groups.length) {
@@ -204,7 +211,9 @@ ONI.store = (function () {
     pm_ideas: { key: "ideas", norm: M.normalizeIdea },
     pm_members: { key: "members", norm: M.normalizeMember },
     pm_prop_defs: { key: "propDefs", norm: M.normalizePropDef },
-    pm_task_groups: { key: "taskGroups", norm: M.normalizeTaskGroup }
+    pm_task_groups: { key: "taskGroups", norm: M.normalizeTaskGroup },
+    // 通知は自分あての行だけ届く（RLSで絞られる）
+    pm_notifications: { key: "notifications", norm: function (r) { return r; } }
   };
 
   var repaint = null;
@@ -367,6 +376,19 @@ ONI.store = (function () {
     var next = M.normalizeItem(merged);
     state.items[state.items.indexOf(it)] = next;
     push("pm_items", itemRow(next), "項目");
+
+    var ref = { item_id: next.id };
+    var label = next.title || "（無題）";
+    // テキスト担当・ビジュアル担当に新しく加わった人へ
+    notifyMembers(added(it.detail.text_owner, next.detail.text_owner), "assigned",
+      "「" + label + "」のテキスト担当になりました", ref);
+    notifyMembers(added(it.detail.visual_owner, next.detail.visual_owner), "assigned",
+      "「" + label + "」のビジュアル担当になりました", ref);
+    // 企画メモで新しくメンションされた人へ
+    if (patch.detail && patch.detail.body !== undefined) {
+      notifyMembers(added(mentionedMemberIds(it.detail.body), mentionedMemberIds(next.detail.body)),
+        "mention", "「" + label + "」の企画メモでメンションされました", ref);
+    }
     emit();
     return next;
   }
@@ -470,6 +492,10 @@ ONI.store = (function () {
     }, patch));
     state.tasks.push(t);
     push("pm_tasks", taskRowOf(t), "タスク");
+    // 担当者を付けて作った場合はその場で通知する
+    notifyMembers(t.owner, "assigned",
+      "タスク「" + (t.title || "（無題）") + "」の担当になりました",
+      { item_id: t.item_id, task_id: t.id });
     emit();
     return t;
   }
@@ -480,6 +506,17 @@ ONI.store = (function () {
     var next = M.normalizeTask(Object.assign({}, t, patch));
     state.tasks[state.tasks.indexOf(t)] = next;
     push("pm_tasks", taskRowOf(next), "タスク");
+
+    var label = next.title || "（無題）";
+    var ref = { item_id: next.item_id, task_id: next.id };
+    // 新しく担当に加わった人へ
+    notifyMembers(added(t.owner, next.owner), "assigned",
+      "タスク「" + label + "」の担当になりました", ref);
+    // メモで新しくメンションされた人へ
+    if (patch && patch.note !== undefined) {
+      notifyMembers(added(mentionedMemberIds(t.note), mentionedMemberIds(next.note)), "mention",
+        "タスク「" + label + "」のメモでメンションされました", ref);
+    }
     emit();
     return next;
   }
@@ -492,6 +529,88 @@ ONI.store = (function () {
     state.tasks = state.tasks.filter(function (t) { return removeIds.indexOf(t.id) < 0; });
     remove("pm_tasks", id, "タスク");
     emit();
+  }
+
+  /* ----------------------------------------------------------- 通知
+   * 担当者に設定されたとき、本文で @メンションされたときに相手へ通知を作る。
+   * 相手にアカウントが紐付いていない担当者には送れない（送信先が無いので黙って飛ばす）。 */
+
+  function notifications() {
+    return state.notifications.slice().sort(function (a, b) {
+      return (a.created_at || "") < (b.created_at || "") ? 1 : -1;
+    });
+  }
+  function unreadCount() {
+    return state.notifications.filter(function (n) { return !n.read_at; }).length;
+  }
+  function markAllRead() {
+    var unread = state.notifications.filter(function (n) { return !n.read_at; });
+    if (!unread.length) return;
+    var now = new Date().toISOString();
+    unread.forEach(function (n) { n.read_at = now; });
+    emit();
+    if (!sb) return;
+    sb.from("pm_notifications").update({ read_at: now })
+      .in("id", unread.map(function (n) { return n.id; }))
+      .then(function () {}, function () {});
+  }
+  function clearNotifications() {
+    var ids = state.notifications.map(function (n) { return n.id; });
+    if (!ids.length) return;
+    state.notifications = [];
+    emit();
+    if (!sb) return;
+    sb.from("pm_notifications").delete().in("id", ids).then(function () {}, function () {});
+  }
+
+  /** 自分の表示名（通知の「誰から」に使う） */
+  function myName() {
+    var p = myProfile();
+    if (p && p.display_name) return p.display_name;
+    return (myEmail || "").split("@")[0] || "だれか";
+  }
+
+  /** 担当者IDの配列に通知を送る。自分自身と、アカウント未紐付けの人は飛ばす。 */
+  function notifyMembers(memberIds, kind, message, ref) {
+    if (!sb || !memberIds || !memberIds.length) return;
+    var rows = [];
+    memberIds.forEach(function (mid) {
+      var p = profileForMember(mid);
+      if (!p || !p.email) return;                                  // 送信先なし
+      if ((p.email || "").toLowerCase() === myEmail) return;        // 自分には送らない
+      rows.push({
+        recipient_email: p.email,
+        actor_name: myName(),
+        kind: kind,
+        message: message,
+        item_id: (ref && ref.item_id) || null,
+        task_id: (ref && ref.task_id) || null
+      });
+    });
+    if (!rows.length) return;
+    sb.from("pm_notifications").insert(rows).then(function () {}, function (e) {
+      console.error("通知を送れませんでした", e);
+    });
+  }
+
+  /** 本文から @メンションされた担当者IDを拾う（表示名の長い順に照合） */
+  function mentionedMemberIds(text) {
+    var out = [];
+    if (!text) return out;
+    var names = state.members.map(function (m) {
+      return { id: m.id, name: memberName(m.id) };
+    }).filter(function (x) { return x.name; })
+      .sort(function (a, b) { return b.name.length - a.name.length; });
+    names.forEach(function (x) {
+      if (text.indexOf("@" + x.name) >= 0 && out.indexOf(x.id) < 0) out.push(x.id);
+    });
+    return out;
+  }
+
+  /** 追加された分だけを返す（既に通知した相手に再通知しないため） */
+  function added(before, after) {
+    var b = M.memberList(before);
+    return M.memberList(after).filter(function (id) { return b.indexOf(id) < 0; });
   }
 
   /* ------------------------------------------- タスク独自グループ */
@@ -550,9 +669,37 @@ ONI.store = (function () {
     return null;
   }
 
+  /* --- アカウントのプロフィール（表示名・アイコン）との紐付け --- */
+
+  /** その担当者に紐付いているアカウントのプロフィール（無ければ null） */
+  function profileForMember(memberId) {
+    if (!memberId) return null;
+    for (var i = 0; i < state.profiles.length; i++) {
+      if (state.profiles[i].member_id === memberId) return state.profiles[i];
+    }
+    return null;
+  }
+
+  /** ログイン中の自分のプロフィール */
+  function myProfile() {
+    for (var i = 0; i < state.profiles.length; i++) {
+      if ((state.profiles[i].email || "").toLowerCase() === myEmail) return state.profiles[i];
+    }
+    return null;
+  }
+
+  /** 担当者の表示名。アカウントが紐付いていて表示名を設定していればそれを使う。 */
   function memberName(id) {
     var m = getMember(id);
-    return m ? m.name : "";
+    if (!m) return "";
+    var p = profileForMember(id);
+    return (p && p.display_name) || m.name;
+  }
+
+  /** 担当者のアイコン画像（本人がマイページで設定したもの）。無ければ null。 */
+  function memberAvatarUrl(id) {
+    var p = profileForMember(id);
+    return (p && p.avatar) || null;
   }
 
   /** 担当者の表示名を「, 」でつないで返す（検索や一覧表示用） */
@@ -828,6 +975,8 @@ ONI.store = (function () {
     var idea = M.normalizeIdea(Object.assign({ id: M.uuid() }, patch));
     state.ideas.unshift(idea);
     push("pm_ideas", ideaRow(idea), "メモ");
+    notifyMembers(mentionedMemberIds(idea.body), "mention",
+      "アイデアmemo でメンションされました", null);
     emit();
     return idea;
   }
@@ -835,8 +984,13 @@ ONI.store = (function () {
   function updateIdea(id, patch) {
     var idea = state.ideas.filter(function (i) { return i.id === id; })[0];
     if (!idea) return null;
+    var beforeBody = idea.body;
     Object.assign(idea, patch);
     push("pm_ideas", ideaRow(idea), "メモ");
+    if (patch && patch.body !== undefined) {
+      notifyMembers(added(mentionedMemberIds(beforeBody), mentionedMemberIds(idea.body)),
+        "mention", "アイデアmemo でメンションされました", null);
+    }
     emit();
     return idea;
   }
@@ -907,6 +1061,15 @@ ONI.store = (function () {
     getMember: getMember,
     memberName: memberName,
     memberNames: memberNames,
+    memberAvatarUrl: memberAvatarUrl,
+    profileForMember: profileForMember,
+    myProfile: myProfile,
+
+    notifications: notifications,
+    unreadCount: unreadCount,
+    markAllRead: markAllRead,
+    clearNotifications: clearNotifications,
+    mentionedMemberIds: mentionedMemberIds,
     createMember: createMember,
     updateMember: updateMember,
     deleteMember: deleteMember,

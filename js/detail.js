@@ -137,11 +137,15 @@ ONI.detail = (function () {
       body.appendChild(el("div", "d-section-title", label));
       var ta = el("textarea", "d-textarea");
       ta.value = value || "";
-      ta.addEventListener("input", function () {
+      if (key === "body") ta.placeholder = "@名前 と書くとその担当者に通知が届きます";
+      function save() {
         var p = {};
         p[key] = ta.value;
         saveSoon({ detail: p });
-      });
+      }
+      // IME変換中は保存しない（変換が確定してしまうのを防ぐ）
+      ta.addEventListener("input", function (e) { if (!e.isComposing) save(); });
+      ta.addEventListener("compositionend", save);
       body.appendChild(ta);
       return ta;
     }

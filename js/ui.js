@@ -133,17 +133,30 @@ ONI.ui = (function () {
     return btn;
   }
 
-  /** 担当者のアバター（頭文字を色付きの丸で） */
+  /**
+   * 担当者のアバター。
+   * アカウントが紐付いていて本人がマイページでアイコン画像を設定していればそれを表示し、
+   * 無ければ表示名の頭文字を色付きの丸で表示する。
+   */
   function memberAvatar(member) {
     var av = document.createElement("i");
     av.className = "member-av";
-    if (member) {
-      av.style.background = member.color;
-      av.textContent = M.memberInitial(member.name);
-    } else {
+    if (!member) {
       av.classList.add("is-empty");
       av.textContent = "?";
+      return av;
     }
+    var url = ONI.store.memberAvatarUrl(member.id);
+    if (url) {
+      av.classList.add("has-img");
+      var img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      av.appendChild(img);
+      return av;
+    }
+    av.style.background = member.color;
+    av.textContent = M.memberInitial(ONI.store.memberName(member.id) || member.name);
     return av;
   }
 
@@ -191,7 +204,7 @@ ONI.ui = (function () {
       var all = ONI.store.members();
       if (!all.length) {
         pop.appendChild(Object.assign(document.createElement("div"),
-          { className: "member-pop-empty", textContent: "「担当者」タブで先に登録してください" }));
+          { className: "member-pop-empty", textContent: "担当者はアカウント管理（管理者）で登録します" }));
         return;
       }
       var list = document.createElement("div");
@@ -209,7 +222,7 @@ ONI.ui = (function () {
           row.className = "member-pop-row" + (on ? " is-on" : "");
           row.appendChild(memberAvatar(m));
           row.appendChild(Object.assign(document.createElement("span"),
-            { className: "member-pop-name", textContent: m.name }));
+            { className: "member-pop-name", textContent: ONI.store.memberName(m.id) || m.name }));
           row.appendChild(Object.assign(document.createElement("span"),
             { className: "member-pop-check", textContent: on ? "✓" : "" }));
           row.addEventListener("click", function (e) {

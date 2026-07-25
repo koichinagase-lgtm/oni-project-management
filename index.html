@@ -31,13 +31,13 @@
       <svg viewBox="0 0 24 24"><path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.8 1 .9 1.6l.1.6h5.2l.1-.6c.1-.6.4-1.2.9-1.6A6 6 0 0 0 12 3Z"/></svg>
       アイデアmemo
     </button>
-    <button class="tab" data-tab="members">
-      <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      担当者
-    </button>
   </nav>
   <div class="appbar-right">
     <span class="me-badge" id="me-badge"></span>
+    <button class="btn btn-ghost notif-btn" id="btn-notif" title="通知">
+      <svg viewBox="0 0 24 24"><path d="M18 8.5a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5"/><path d="M10.3 19a2 2 0 0 0 3.4 0"/></svg>
+      <span class="notif-badge" id="notif-badge" hidden></span>
+    </button>
   </div>
 </header>
 
@@ -112,7 +112,7 @@
         <span class="idea-author-label">記載者</span>
         <span id="idea-author-pick"></span>
       </div>
-      <textarea class="input" id="idea-body" rows="3" placeholder="思いついたことを書き留める…"></textarea>
+      <textarea class="input" id="idea-body" rows="3" placeholder="思いついたことを書き留める…（@名前 でメンション）"></textarea>
       <input class="input" id="idea-url" placeholder="参考URL（任意）">
       <button class="btn btn-primary" id="idea-add">追加</button>
     </div>
@@ -120,16 +120,9 @@
   </div>
 </section>
 
-<!-- --------------------------------------------------------- 担当者 -->
-<section class="panel" data-panel="members" hidden>
-  <div class="sheet">
-    <div class="member-add">
-      <input class="input" id="member-name" placeholder="担当者名">
-      <button class="btn btn-primary" id="member-add-btn">＋ 追加</button>
-    </div>
-    <div id="member-list"></div>
-  </div>
-</section>
+<!-- ------------------------------------------------- 通知（右サイドバー） -->
+<div class="notif-overlay" id="notif-overlay" hidden></div>
+<aside class="notif-drawer" id="notif-drawer" hidden aria-label="通知"></aside>
 
 <!-- ------------------------------------------------------- 詳細パネル -->
 <div class="overlay" id="overlay" hidden></div>

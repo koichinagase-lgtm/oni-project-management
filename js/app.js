@@ -41,6 +41,8 @@ ONI.app = (function () {
       var s = JSON.parse(localStorage.getItem(UI_KEY) || "null");
       if (s) Object.assign(ui, s);
     } catch (e) { /* 既定値のまま */ }
+    // 「担当者」タブは廃止（アカウント管理へ移管）。保存値が残っていたらガントに戻す
+    if (ui.tab === "members") ui.tab = "gantt";
   }
 
   /* -------------------------------------------------------------- toast */
@@ -1020,7 +1022,7 @@ ONI.app = (function () {
     if (noteOpen) {
       var note = document.createElement("textarea");
       note.className = "td-note";
-      note.placeholder = "メモを入力…";
+      note.placeholder = "メモを入力…（@名前 でメンション）";
       note.rows = 2;
       note.value = t.note || "";
       note.dataset.fkey = "t:" + t.id + ":note";
@@ -1381,6 +1383,122 @@ ONI.app = (function () {
 
   /* ==================== 担当者マスタ ==================== */
 
+  /* ------------------------------------------------- 通知（右サイドバー） */
+
+  function renderNotifBadge() {
+    var n = ONI.store.unreadCount();
+    var b = $("notif-badge");
+    b.textContent = n > 99 ? "99+" : String(n);
+    b.hidden = !n;
+    $("btn-notif").classList.toggle("has-unread", !!n);
+  }
+
+  function openNotif() {
+    $("notif-drawer").hidden = false;
+    $("notif-overlay").hidden = false;
+    renderNotifDrawer();
+    // 開いた時点で既読にする（一覧は残る）
+    ONI.store.markAllRead();
+  }
+  function closeNotif() {
+    $("notif-drawer").hidden = true;
+    $("notif-overlay").hidden = true;
+  }
+  function toggleNotif() {
+    if ($("notif-drawer").hidden) openNotif(); else closeNotif();
+  }
+
+  /** 通知の日時を「今日 14:30」「7/23」のように短く表す */
+  function notifWhen(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    var t = M.today();
+    var sameDay = d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth()
+      && d.getDate() === t.getDate();
+    var hm = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    if (sameDay) return "今日 " + hm;
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + hm;
+  }
+
+  function renderNotifDrawer() {
+    var d = $("notif-drawer");
+    d.innerHTML = "";
+
+    var head = document.createElement("div");
+    head.className = "notif-head";
+    head.appendChild(Object.assign(document.createElement("span"),
+      { className: "notif-title", textContent: "通知" }));
+
+    var list = ONI.store.notifications();
+    if (list.length) {
+      var clear = document.createElement("button");
+      clear.className = "btn btn-ghost";
+      clear.textContent = "すべて消す";
+      clear.addEventListener("click", function () {
+        if (!confirm("通知をすべて消しますか？")) return;
+        ONI.store.clearNotifications();
+      });
+      head.appendChild(clear);
+    }
+    var close = document.createElement("button");
+    close.className = "btn btn-icon notif-close";
+    close.textContent = "×";
+    close.title = "閉じる";
+    close.addEventListener("click", closeNotif);
+    head.appendChild(close);
+    d.appendChild(head);
+
+    var body = document.createElement("div");
+    body.className = "notif-body";
+
+    if (!list.length) {
+      body.appendChild(emptyState("通知はありません",
+        "担当者に設定されたときや、メモで @ でメンションされたときにここに届きます。"));
+      d.appendChild(body);
+      return;
+    }
+
+    list.forEach(function (n) {
+      var row = document.createElement("div");
+      row.className = "notif-item" + (n.read_at ? "" : " is-unread");
+
+      var kind = document.createElement("span");
+      kind.className = "notif-kind " + (n.kind === "mention" ? "is-mention" : "is-assigned");
+      kind.textContent = n.kind === "mention" ? "メンション" : "担当";
+      row.appendChild(kind);
+
+      var main = document.createElement("div");
+      main.className = "notif-main";
+      main.appendChild(Object.assign(document.createElement("div"),
+        { className: "notif-msg", textContent: n.message }));
+      main.appendChild(Object.assign(document.createElement("div"), {
+        className: "notif-meta",
+        textContent: (n.actor_name ? n.actor_name + " ・ " : "") + notifWhen(n.created_at)
+      }));
+      row.appendChild(main);
+
+      // 対象があれば押して開けるようにする
+      if (n.item_id && ONI.store.getItem(n.item_id)) {
+        row.classList.add("is-clickable");
+        row.title = "項目の詳細を開く";
+        row.addEventListener("click", function () {
+          closeNotif();
+          ONI.detail.open(n.item_id);
+        });
+      } else if (n.task_id) {
+        row.classList.add("is-clickable");
+        row.title = "タスク管理を開く";
+        row.addEventListener("click", function () {
+          closeNotif();
+          setTab("tasks");
+        });
+      }
+
+      body.appendChild(row);
+    });
+    d.appendChild(body);
+  }
+
   function renderMembers() {
     var host = $("member-list");
     host.innerHTML = "";
@@ -1519,12 +1637,9 @@ ONI.app = (function () {
   function renderAll() {
     if (ui.tab === "gantt") renderGantt();
     if (ui.tab === "tasks") renderTasks();
-    if (ui.tab === "members") {
-      var f = captureFocus();
-      renderMembers();
-      restoreFocus($("member-list"), f);
-    }
     if (ui.tab === "ideas") renderIdeas();
+    renderNotifBadge();
+    if (!$("notif-drawer").hidden) renderNotifDrawer();
     ONI.detail.refresh();
   }
 
@@ -1721,23 +1836,13 @@ ONI.app = (function () {
       $("me-badge").textContent = me.email + "（" + roleLabel + "）";
       $("me-badge").title = "ログイン中のアカウント";
     }
-    /* 担当者マスタ */
-    function addMember() {
-      var name = $("member-name").value.trim();
-      if (!name) { $("member-name").focus(); return; }
-      ONI.store.createMember({ name: name });
-      $("member-name").value = "";
-      $("member-name").focus();
-      toast("担当者を追加しました");
-    }
-    $("member-add-btn").addEventListener("click", addMember);
-    $("member-name").addEventListener("keydown", function (e) {
-      // IME変換確定のEnterでは追加しない
-      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) addMember();
-    });
+    /* 通知（右サイドバー） */
+    $("btn-notif").addEventListener("click", function () { toggleNotif(); });
+    $("notif-overlay").addEventListener("click", closeNotif);
 
     /* キーボード操作 */
     document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("notif-drawer").hidden) { closeNotif(); return; }
       if (e.target.matches("input, textarea, select")) return;
       if (ui.tab !== "gantt") return;
       if (e.key === "ArrowLeft") $("nav-prev").click();
@@ -1772,8 +1877,8 @@ ONI.app = (function () {
 
 /* 起動の流れ: ログイン確認 → Supabase クライアントを渡す → 画面を組み立てる */
 document.addEventListener("DOMContentLoaded", function () {
-  ONI.auth.start(function (client) {
-    ONI.store.setClient(client);
+  ONI.auth.start(function (client, session) {
+    ONI.store.setClient(client, session && session.user && session.user.email);
     ONI.app.init();
   });
 });
