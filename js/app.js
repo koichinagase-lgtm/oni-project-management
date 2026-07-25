@@ -1386,6 +1386,35 @@ ONI.app = (function () {
 
   /* ------------------------------------------------- 通知（右サイドバー） */
 
+  /** 右上のアカウント表示。自分のアイコン（マイページで設定）＋メールアドレス。 */
+  function renderMeBadge() {
+    var badge = $("me-badge");
+    if (!badge) return;
+    var me = ONI.auth.me();
+    if (!me) return;
+
+    var p = ONI.store.myProfile ? ONI.store.myProfile() : null;
+    var name = (p && p.display_name) || (me.email || "").split("@")[0];
+    var roleLabel = { admin: "管理者", editor: "編集可", viewer: "閲覧のみ" }[me.role] || me.role;
+
+    badge.innerHTML = "";
+    var av = document.createElement("i");
+    av.className = "me-av";
+    if (p && p.avatar) {
+      av.classList.add("has-img");
+      var img = document.createElement("img");
+      img.src = p.avatar;
+      img.alt = "";
+      av.appendChild(img);
+    } else {
+      av.textContent = M.memberInitial(name);
+    }
+    badge.appendChild(av);
+    badge.appendChild(Object.assign(document.createElement("span"),
+      { className: "me-name", textContent: me.email + "（" + roleLabel + "）" }));
+    badge.title = "ログイン中のアカウント: " + name + "（" + me.email + "）";
+  }
+
   function renderNotifBadge() {
     var n = ONI.store.unreadCount();
     var b = $("notif-badge");
@@ -1639,6 +1668,7 @@ ONI.app = (function () {
     if (ui.tab === "gantt") renderGantt();
     if (ui.tab === "tasks") renderTasks();
     if (ui.tab === "ideas") renderIdeas();
+    renderMeBadge();
     renderNotifBadge();
     if (!$("notif-drawer").hidden) renderNotifDrawer();
     ONI.detail.refresh();
@@ -1832,13 +1862,9 @@ ONI.app = (function () {
       toast("メモを追加しました");
     });
 
-    /* ログイン中のアカウント表示（ログアウトはワークスペース側にある） */
-    var me = ONI.auth.me();
-    if (me) {
-      var roleLabel = { admin: "管理者", editor: "編集可", viewer: "閲覧のみ" }[me.role] || me.role;
-      $("me-badge").textContent = me.email + "（" + roleLabel + "）";
-      $("me-badge").title = "ログイン中のアカウント";
-    }
+    /* ログイン中のアカウント表示（ログアウトはワークスペース側にある）。
+       アイコン・表示名はプロフィールの読み込み後に届くので renderAll からも呼ぶ。 */
+    renderMeBadge();
     /* 通知（右サイドバー） */
     $("btn-notif").addEventListener("click", function () { toggleNotif(); });
     $("notif-overlay").addEventListener("click", closeNotif);

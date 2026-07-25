@@ -77,7 +77,26 @@
 }
 .auth-link:hover { color: var(--oni-red); }
 
-.me-badge { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.me-badge { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+/* 右上の自分のアイコン（マイページで設定した画像。無ければ表示名の頭文字） */
+.me-av {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--oni-red);
+  color: var(--oni-ivory);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+.me-av.has-img { background: transparent; }
+.me-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 html, body {
   height: 100%;
@@ -1629,7 +1648,7 @@ body {
   /* --- アプリバー: 2段（上=ブランド+ログアウト / 下=タブ） --- */
   .appbar { flex-wrap: wrap; height: auto; gap: 0 8px; padding: 8px 10px 0; }
   .brand-sub { font-size: 11px; }
-  .me-badge { display: none; }
+  .me-badge .me-name { display: none; }   /* 狭い画面ではアイコンだけ残す */
   .appbar-right { margin-left: auto; }
   .tabs {
     order: 10;
