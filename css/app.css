@@ -430,10 +430,26 @@ body {
 .member-chip:hover { border-color: var(--line); }
 .member-chip.is-empty { color: var(--muted); }
 .member-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 複数人は「アイコン＋名前」を1組にして、担当者ごとに間をあけて並べる */
-.member-chip-list { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-.member-chip-one { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.member-chip-more { color: var(--muted); white-space: nowrap; }
+/* 担当者が付いているときは、外枠をなくして1人ずつ独立したチップにする */
+.member-chip:not(.is-empty) {
+  border-color: transparent;
+  background: transparent;
+  padding: 0;
+  gap: 0;
+}
+.member-chip-list { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.member-chip-one {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 9px 2px 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.member-chip:hover .member-chip-one { border-color: var(--line); }
+.member-chip-more { color: var(--muted); white-space: nowrap; padding: 0 2px; }
 
 .member-pop {
   position: fixed;
