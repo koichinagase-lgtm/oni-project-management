@@ -460,6 +460,11 @@ ONI.app = (function () {
 
   function taskItemOf(t) { return ONI.store.getItem(t.item_id); }
 
+  /** その項目に属する親タスク（子タスクは除く）。「空を隠す」の判定に使う。 */
+  function topLevelForItem(itemId) {
+    return ONI.store.tasksForItem(itemId).filter(function (t) { return !t.parent_id; });
+  }
+
   function sortTasks(list) {
     return list.slice().sort(function (a, b) {
       var da = a.due_date || "9999-12-31", db = b.due_date || "9999-12-31";
@@ -542,7 +547,7 @@ ONI.app = (function () {
       }
       ONI.store.items().forEach(function (it) {
         // タスクが1件もない項目は、設定に応じて丸ごと省く
-        if (ui.taskHideEmpty && !ONI.store.tasksForItem(it.id).length) return;
+        if (ui.taskHideEmpty && !topLevelForItem(it.id).length) return;
         secs.push({
           key: "it" + it.id, label: it.title, color: ONI.store.colorOf(it), itemId: it.id,
           tasks: sortTasks(open.filter(function (t) { return t.item_id === it.id; })),
@@ -635,7 +640,8 @@ ONI.app = (function () {
   function renderTaskNav() {
     var nav = $("task-nav");
     nav.innerHTML = "";
-    var open = ONI.store.tasks().filter(function (t) { return !t.done; });
+    // 子タスクは数えない（一覧に出るのは親タスクだけなので、件数も揃える）
+    var open = ONI.store.tasks().filter(function (t) { return !t.done && !t.parent_id; });
     var today = tdToday();
 
     function navBtn(active, label, count, onClick) {
@@ -709,7 +715,7 @@ ONI.app = (function () {
       var count = open.filter(function (t) { return t.item_id === it.id; }).length;
       // タスクが1件も割り当てられていない項目は隠せる（表示中のものは残す）
       var isCurrent = ui.taskView === "item" && ui.taskItem === it.id;
-      if (ui.taskHideEmpty && !ONI.store.tasksForItem(it.id).length && !isCurrent) {
+      if (ui.taskHideEmpty && !topLevelForItem(it.id).length && !isCurrent) {
         hiddenItems++;
         return;
       }
