@@ -783,7 +783,14 @@ ONI.detail = (function () {
 
     btn.addEventListener("click", function () {
       form.hidden = !form.hidden;
-      if (!form.hidden) name.focus();
+      if (form.hidden) return;
+      name.value = "";          // 開くたびに空から始める
+      type.selectedIndex = 0;
+      name.focus();
+    });
+    // Esc で閉じる
+    form.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { form.hidden = true; btn.focus(); }
     });
 
     form.appendChild(name);

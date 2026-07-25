@@ -1581,6 +1581,8 @@ body {
   gap: 8px;
   margin-top: 8px;
 }
+/* display:flex が hidden 属性に勝ってしまうので明示的に隠す */
+.d-addprop-form[hidden] { display: none; }
 .d-addprop-form input { flex: 1; }
 .d-addprop-form select { flex: none; width: 140px; }
 
