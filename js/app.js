@@ -1029,6 +1029,7 @@ ONI.app = (function () {
       bindDebouncedSave(note, function () {
         ONI.store.updateTask(t.id, { note: note.value });
       }, 400, function () { autoGrow(note); });
+      ONI.ui.attachMention(note);   // @ で担当者の候補を出す
       expand.appendChild(note);
       setTimeout(function () { autoGrow(note); }, 0);
     }
@@ -1815,6 +1816,8 @@ ONI.app = (function () {
     });
 
     /* タスク管理ページは renderTasks が毎回組み立てるため、ここでの配線は不要 */
+
+    ONI.ui.attachMention($("idea-body"));   // @ で担当者の候補を出す
 
     $("idea-add").addEventListener("click", function () {
       var body = $("idea-body").value.trim();

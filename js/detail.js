@@ -146,6 +146,7 @@ ONI.detail = (function () {
       // IME変換中は保存しない（変換が確定してしまうのを防ぐ）
       ta.addEventListener("input", function (e) { if (!e.isComposing) save(); });
       ta.addEventListener("compositionend", save);
+      ONI.ui.attachMention(ta);   // @ で担当者の候補を出す
       body.appendChild(ta);
       return ta;
     }
@@ -704,6 +705,12 @@ ONI.detail = (function () {
       dates.appendChild(el("span", null, "〜"));
       dates.appendChild(e2);
       wrap.appendChild(dates);
+
+    } else if (def.type === "member") {
+      // 担当者型: 複数人を割り当てられる（テキスト担当・ビジュアル担当と同じ部品）
+      wrap.appendChild(ONI.ui.memberSelect(M.memberList(val), function (v) {
+        savePropValue(def.id, v);
+      }, { placeholder: "担当者なし" }));
 
     } else if (def.type === "multiselect") {
       var cur = Array.isArray(val) ? val : [];

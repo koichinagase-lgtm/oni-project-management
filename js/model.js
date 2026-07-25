@@ -270,6 +270,7 @@ ONI.model = (function () {
   var PROP_TYPES = {
     select: "選択",
     multiselect: "マルチセレクト",
+    member: "担当者",
     text: "テキスト",
     number: "数字",
     daterange: "期間",

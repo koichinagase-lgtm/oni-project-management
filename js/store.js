@@ -384,6 +384,16 @@ ONI.store = (function () {
       "「" + label + "」のテキスト担当になりました", ref);
     notifyMembers(added(it.detail.visual_owner, next.detail.visual_owner), "assigned",
       "「" + label + "」のビジュアル担当になりました", ref);
+    // 担当者型のカスタムプロパティに新しく加わった人へ
+    if (patch.detail && patch.detail.props) {
+      state.propDefs.filter(function (def) { return def.type === "member"; })
+        .forEach(function (def) {
+          var before = (it.detail.props || {})[def.id];
+          var after = (next.detail.props || {})[def.id];
+          notifyMembers(added(before, after), "assigned",
+            "「" + label + "」の" + def.name + "になりました", ref);
+        });
+    }
     // 企画メモで新しくメンションされた人へ
     if (patch.detail && patch.detail.body !== undefined) {
       notifyMembers(added(mentionedMemberIds(it.detail.body), mentionedMemberIds(next.detail.body)),

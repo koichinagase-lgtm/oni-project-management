@@ -258,7 +258,124 @@ ONI.ui = (function () {
     return chip;
   }
 
+  /* ------------------------------------------------- @メンションの候補リスト
+   * テキスト入力欄で「@」に続けて文字を打つと担当者の候補が出る。
+   * 選ぶと「@表示名 」が挿入され、保存されると相手に通知が届く。 */
+
+  function attachMention(el) {
+    var pop = null, matches = [], idx = 0, range = null;
+
+    function close() {
+      if (!pop) return;
+      pop.remove();
+      pop = null;
+      matches = [];
+      range = null;
+    }
+
+    /** キャレット直前の「@検索文字」を拾う（空白を挟んでいたら対象外） */
+    function currentQuery() {
+      var pos = el.selectionStart;
+      if (pos == null) return null;
+      var m = /@([^\s@]{0,24})$/.exec(el.value.slice(0, pos));
+      if (!m) return null;
+      return { q: m[1], start: pos - m[0].length, end: pos };
+    }
+
+    function nameOf(m) { return ONI.store.memberName(m.id) || m.name; }
+
+    function insert(member) {
+      if (!range) return;
+      var name = nameOf(member);
+      var v = el.value;
+      el.value = v.slice(0, range.start) + "@" + name + " " + v.slice(range.end);
+      var caret = range.start + name.length + 2;
+      close();
+      el.focus();
+      try { el.setSelectionRange(caret, caret); } catch (e) { /* 対応外の入力欄 */ }
+      // 保存処理（input を購読している）に変更を伝える
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    function draw() {
+      if (!pop) {
+        pop = document.createElement("div");
+        pop.className = "member-pop mention-pop";
+        document.body.appendChild(pop);
+      }
+      pop.innerHTML = "";
+      var list = document.createElement("div");
+      list.className = "member-pop-list";
+      matches.forEach(function (m, i) {
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "member-pop-row" + (i === idx ? " is-on" : "");
+        row.appendChild(memberAvatar(m));
+        row.appendChild(Object.assign(document.createElement("span"),
+          { className: "member-pop-name", textContent: nameOf(m) }));
+        // mousedown で挿入する（blur より先に処理するため）
+        row.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          insert(m);
+        });
+        list.appendChild(row);
+      });
+      pop.appendChild(list);
+
+      var r = el.getBoundingClientRect();
+      var ph = pop.offsetHeight;
+      var top = r.bottom + 4;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 4);
+      pop.style.left = Math.min(r.left, window.innerWidth - pop.offsetWidth - 8) + "px";
+      pop.style.top = top + "px";
+    }
+
+    function update() {
+      var cur = currentQuery();
+      if (!cur) { close(); return; }
+      var q = cur.q.toLowerCase();
+      matches = ONI.store.members().filter(function (m) {
+        return !q || nameOf(m).toLowerCase().indexOf(q) >= 0;
+      });
+      if (!matches.length) { close(); return; }
+      range = cur;
+      idx = 0;
+      draw();
+    }
+
+    el.addEventListener("input", update);
+    el.addEventListener("click", update);
+    el.addEventListener("keyup", function (e) {
+      // 矢印キーでの移動はキャレット位置だけ見直す（選択中の候補は動かさない）
+      if (["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(e.key) >= 0) update();
+    });
+    el.addEventListener("keydown", function (e) {
+      if (!pop) return;
+      if (e.key === "Escape") { e.preventDefault(); close(); return; }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        idx = (idx + 1) % matches.length;
+        draw();
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        idx = (idx - 1 + matches.length) % matches.length;
+        draw();
+        return;
+      }
+      // IME変換中の Enter は変換確定なので拾わない
+      if ((e.key === "Enter" || e.key === "Tab") && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        insert(matches[idx]);
+      }
+    });
+    el.addEventListener("blur", function () { setTimeout(close, 120); });
+    return el;
+  }
+
   return {
+    attachMention: attachMention,
     swatchGrid: swatchGrid,
     colorButton: colorButton,
     attachPopover: attachPopover,
