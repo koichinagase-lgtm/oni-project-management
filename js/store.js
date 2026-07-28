@@ -25,6 +25,8 @@ ONI.store = (function () {
   var M = ONI.model;
   var sb = null;
   var ready = false;
+  // 初回読み込みに失敗したか。true の間は一切書き込まない。
+  var loadFailed = false;
 
   var state = {
     groups: [], items: [], tasks: [], events: [], ideas: [],
@@ -56,28 +58,39 @@ ONI.store = (function () {
     };
   }
 
+  /** 読み込みに失敗した状態では一切書き込まない。
+   *  空の state を正しいものと誤認して DB に書くと、重複や欠落の原因になる。 */
+  function canWrite() {
+    if (!sb) return false;
+    if (loadFailed) {
+      ONI.app && ONI.app.toast("データを読み込めていないため保存できません。再読み込みしてください");
+      return false;
+    }
+    return true;
+  }
+
   /** 1行を書き込む（挿入・更新のどちらでも） */
   function push(table, row, label) {
-    if (!sb) return;
+    if (!canWrite()) return;
     pending++;
     sb.from(table).upsert(row).then(onError(label || table), onError(label || table));
   }
 
   /** まとめて書き込む（並び替えなど複数行が動くとき） */
   function pushMany(table, rows, label) {
-    if (!sb || !rows.length) return;
+    if (!canWrite() || !rows.length) return;
     pending++;
     sb.from(table).upsert(rows).then(onError(label || table), onError(label || table));
   }
 
   function remove(table, id, label) {
-    if (!sb) return;
+    if (!canWrite()) return;
     pending++;
     sb.from(table).delete().eq("id", id).then(onError(label || table), onError(label || table));
   }
 
   function removeMany(table, ids, label) {
-    if (!sb || !ids.length) return;
+    if (!canWrite() || !ids.length) return;
     pending++;
     sb.from(table).delete().in("id", ids).then(onError(label || table), onError(label || table));
   }
@@ -170,8 +183,12 @@ ONI.store = (function () {
     ]).then(function (r) {
       var err = r.filter(function (x) { return x.error; })[0];
       if (err) {
+        // 1つでも読めていなければ、以降の書き込みを止める。
+        // 空の state のまま続行すると「まっさらなワークスペース」と誤認して
+        // 既定グループを DB に書き込んでしまうし、利用者が作り直して重複が生まれる。
         console.error("読み込みに失敗しました", err.error);
-        ONI.app && ONI.app.toast("データを読み込めませんでした");
+        loadFailed = true;
+        ONI.app && ONI.app.toast("データを読み込めませんでした。保存を停止しています。再読み込みしてください");
       }
       state.groups = (r[0].data || []).map(M.normalizeGroup);
       state.items = (r[1].data || []).map(M.normalizeItem);
@@ -186,7 +203,8 @@ ONI.store = (function () {
       state.notifications = (r[10].data || []);
 
       // まっさらなワークスペースなら既定グループを用意する
-      if (!state.groups.length) {
+      // （読み込みに失敗しているときは「空」が事実か分からないので作らない）
+      if (!loadFailed && !state.groups.length) {
         M.DEFAULT_GROUPS.forEach(function (g, i) {
           var row = M.normalizeGroup({ name: g.name, color: g.color, sort_order: (i + 1) * 10 });
           state.groups.push(row);
